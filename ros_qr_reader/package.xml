@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>ros_qr_reader</name>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
+  <maintainer email="voltanie@todo.todo">voltanie</maintainer>
+  <license>Apache-2.0</license>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+
+  <depend>rclpy</depend>  <!-- ROS 2 Python Client Library -->
+  <depend>sensor_msgs</depend> <!-- For Image messages -->
+  <depend>cv_bridge</depend> <!-- For converting between ROS and OpenCV image formats -->
+  <depend>std_srvs</depend> <!-- For using services -->
+  <depend>geometry_msgs</depend> <!-- For the Point message -->
+  <depend>std_msgs</depend>
+
+  <!-- Additional Dependencies (that you installed with pip) -->
+  <exec_depend>qreader</exec_depend>  <!-- Dependency for qreader -->
+  <exec_depend>opencv-python</exec_depend> <!-- Dependency for OpenCV -->
+  <exec_depend>numpy</exec_depend>   <!-- Dependency for numpy -->
+  
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
