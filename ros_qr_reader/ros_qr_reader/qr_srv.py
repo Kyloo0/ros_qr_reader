@@ -1,21 +1,28 @@
 import rclpy
 from rclpy.node import Node
-from cv2 import VideoCapture, imshow, waitKey, destroyAllWindows
+from cv_bridge import CvBridge
+from sensor_msgs.msg import Image
+from std_srvs.srv import Trigger
 import numpy as np
 from qreader import QReader
-from std_srvs.srv import Trigger
-import threading
+from cv2 import imshow, waitKey
 
 class QRCodeDroneService(Node):
     def __init__(self):
         super().__init__('qr_code_drone_service')
+
         self.srv = self.create_service(Trigger, 'start_stop_qr_detection', self.start_stop_callback)
-        self.cap = None
-        self.camera_index = 0
         self.is_detecting = False
         self.current_obj = 0
         self.direction = ''
-        self.thread = None
+        self.bridge = CvBridge()
+
+        # Subscribe to the camera image topic
+        self.image_subscriber = self.create_subscription(
+            Image,
+            '/camera/color/image_raw',  # Gantilah dengan topik kamera yang sesuai
+            self.image_callback,
+            10)
 
     def start_stop_callback(self, request, response):
         """
@@ -26,38 +33,23 @@ class QRCodeDroneService(Node):
             response.success = True
             response.message = "QR Code detection stopped."
         else:
-            success = self.start_detection()
-            response.success = success
-            response.message = "QR Code detection started." if success else "Failed to start QR detection."
+            self.is_detecting = True
+            response.success = True
+            response.message = "QR Code detection started."
         return response
 
-    def start_detection(self):
-        if self.cap is None or not self.cap.isOpened():
-            self.cap = VideoCapture(self.camera_index)
-            if not self.cap.isOpened():
-                self.get_logger().error(f"Error: Could not open camera at index {self.camera_index}")
-                return False
-        self.is_detecting = True
-        self.get_logger().info("QR Code detection started.")
-
-        # Start the camera feed in a separate thread
-        self.thread = threading.Thread(target=self.camera_feed)
-        self.thread.daemon = True
-        self.thread.start()
-        return True
-
-    def camera_feed(self):
+    def image_callback(self, msg: Image):
         """
-        Reads frames from the camera and processes them in real-time.
-        Runs in a separate thread.
+        Callback function for receiving and processing images.
         """
-        while self.is_detecting:
-            ret, frame = self.cap.read()
-            if not ret:
-                self.get_logger().error("Failed to grab frame,  stopping detection.")
-                # self.stop_detection()
-                break
+        if not self.is_detecting:
+            return
 
+        try:
+            # Convert the ROS Image message to OpenCV format
+            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+
+            # Decode QR from the frame
             qreader_out = self.decode_qr_from_frame(frame)
             degree_info = self.detect_degree_information(frame)
             cleaned_list = [x for x in qreader_out if x is not None]
@@ -80,14 +72,15 @@ class QRCodeDroneService(Node):
             # Display frame (optional)
             imshow("QR Code Scanner", frame)
             if waitKey(1) & 0xFF == ord('q'):
-                # self.stop_detection()  # Stop detection on 'q'
-                break
+                self.is_detecting = False  # Stop detection when 'q' is pressed
 
-        # Clean up when the loop exits
-        self.cap.release()
-        destroyAllWindows()
+        except Exception as e:
+            self.get_logger().error(f"Failed to process image: {e}")
 
     def calculate_rotation_degrees(self, corners):
+        """
+        Calculates the rotation degrees based on the QR code corners.
+        """
         try:
             corners = np.array(corners)
             if corners.shape != (4, 2):
@@ -115,10 +108,16 @@ class QRCodeDroneService(Node):
             return (None, None)
 
     def decode_qr_from_frame(self, frame):
+        """
+        Decodes QR code from the frame using QReader.
+        """
         qreader_out = QReader().detect_and_decode(image=frame)
         return qreader_out
     
     def detect_degree_information(self, frame):
+        """
+        Detects the degree of rotation of the QR code in the frame.
+        """
         detection_results = QReader().detect(image=frame)
         if detection_results:
             for k, v in enumerate(detection_results):
@@ -133,4 +132,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
