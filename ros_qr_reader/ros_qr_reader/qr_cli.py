@@ -20,7 +20,7 @@ class QrCodeClient(Node):
 
 def main(args=None):
     rclpy.init()
-    mission_number = int(input("Masukkan misi (1-4): "))
+    mission_number = int(input("Input mission (1-4): "))
 
     client = QrCodeClient()
     future = client.send_request(mission_number)
