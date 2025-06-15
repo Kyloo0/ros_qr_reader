@@ -23,7 +23,7 @@ class QRCodeDroneService(Node):
         "Service callback to start or stop QR code detection."
         if request.data< 1 or request.data > 4:
             response.success = False
-            response.message = f"Misi {request.data} tidak valid. Pilih 1-4."
+            response.message = f"Mission {request.data} error, please check your input!"
             return response
 
         self.current_obj = request.data
@@ -48,19 +48,15 @@ class QRCodeDroneService(Node):
                 self.get_logger().info(f"QR Code Detected: {cleaned_list}  {degree_info}")
                 for r in cleaned_list:
                     sequence = r.split(',')
-                    if len(sequence) < self.current_obj:
-                        self.get_logger().warning(f"QR data terlalu pendek untuk misi {self.current_obj}")
-                        continue
-                    
                     try:
                         qr_target = int(sequence[-1])
                         direction = sequence[self.current_obj - 1]
 
                         self.direction = direction
-                        self.get_logger().info(f"[Misi {self.current_obj}] Arah: {self.direction}, Rotasi: {degree_info}")
+                        self.get_logger().info(f"[Mission {self.current_obj}] Direction: {self.direction}, Rotation: {degree_info}")
 
                         if qr_target == self.current_obj:
-                            self.get_logger().info(f"Target {self.current_obj} tercapai!")
+                            self.get_logger().info(f"Target {self.current_obj} achieved!")
                             self.is_detecting = False
 
                     except (ValueError, IndexError) as e:
