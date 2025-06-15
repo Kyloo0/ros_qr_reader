@@ -1,32 +1,30 @@
 import rclpy
 from rclpy.node import Node
-from std_srvs.srv import Trigger 
+from std_srvs.srv import Trigger
+from vision_direction.srv import VisionDirection
+
 
 class QrCodeClient(Node):
     def __init__(self):
         super().__init__('qr_code_client')
-        self.cli = self.create_client(Trigger, 'start_stop_qr_detection') # Client for your service
+        self.cli = self.create_client(VisionDirection, 'start_stop_qr_detection') # Client for your service
         while not self.cli.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
-        self.req = Trigger.Request()
+        # self.req = VisionDirection.Request()
 
-    def send_request(self, start=True):
-        if start:
-            self.get_logger().info("Requesting to START QR Code Detection...")
-        else:
-            self.get_logger().info("Requesting to STOP QR Code Detection...")
-
-        self.future = self.cli.call_async(self.req)
-        return self.future
+    def send_request(self, mission_number):
+        req = VisionDirection.Request()
+        req.data = mission_number
+        future = self.cli.call_async(req)
+        return future
 
 def main(args=None):
-    rclpy.init(args=args)
+    rclpy.init()
+    mission_number = int(input("Masukkan misi (1-4): "))
+
     client = QrCodeClient()
-    future = client.send_request()
+    future = client.send_request(mission_number)
     rclpy.spin_until_future_complete(client, future)
-    response = future.result()
-    client.get_logger().info(
-        f'Result: {response.message} ')
     client.destroy_node()
     rclpy.shutdown()
 
