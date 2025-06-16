@@ -7,6 +7,7 @@ from vision_direction.srv import VisionDirection
 import numpy as np
 from qreader import QReader
 from cv2 import imshow, waitKey
+import re
 
 class QRCodeDroneService(Node):
     def __init__(self):
@@ -18,6 +19,7 @@ class QRCodeDroneService(Node):
         self.direction = ''
         self.bridge = CvBridge()
         self.image_subscriber = self.create_subscription(Image, '/camera/color/image_raw', self.image_callback,10)
+        self.success = True
 
     def start_stop_callback(self, request, response):
         "Service callback to start or stop QR code detection."
@@ -43,8 +45,17 @@ class QRCodeDroneService(Node):
             # Decode QR from the frame
             qreader_out = self.decode_qr_from_frame(frame)
             degree_info = self.detect_degree_information(frame)
+
+            for msg in qreader_out:
+                if not isinstance(msg, str) or not re.match(r'^\s*(?:[NSEW]\s*,\s*)*[NSEW]\s*,\s*\d+\s*$', msg):                    
+                    self.get_logger().info(f"[Mission {self.current_obj}] is not in valid format. Message: {qreader_out}")
+                    self.success = False
+                    break
+                self.success = True
+
+
             cleaned_list = [x for x in qreader_out if x is not None]
-            if cleaned_list:
+            if cleaned_list and self.success:
                 self.get_logger().info(f"QR Code Detected: {cleaned_list}  {degree_info}")
                 for r in cleaned_list:
                     sequence = r.split(',')
