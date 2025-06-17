@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
-from std_srvs.srv import Trigger
+from std_msgs.msg import String
 from vision_direction.srv import VisionDirection
 import numpy as np
 from qreader import QReader
@@ -19,6 +19,10 @@ class QRCodeDroneService(Node):
         self.direction = ''
         self.bridge = CvBridge()
         self.image_subscriber = self.create_subscription(Image, '/camera/color/image_raw', self.image_callback,10)
+        self.publisher_direction = self.create_publisher(String, 'qr_direction', 10)
+        self.publisher_content = self.create_publisher(String, 'qr_content', 10)
+        timer_period = 10
+        self.timer = self.create_timer(timer_period, self.image_callback)
         self.success = True
 
     def start_stop_callback(self, request, response):
@@ -34,8 +38,11 @@ class QRCodeDroneService(Node):
         response.message = f"QR Code detection {'started' if self.is_detecting else 'stopped'}."
         return response
 
-    def image_callback(self, msg: Image):
+    def image_callback(self, msg=Image):
         "Callback function for receiving and processing images."
+        content = String()
+        dir = String()
+
         if not self.is_detecting:
             return
 
@@ -45,6 +52,12 @@ class QRCodeDroneService(Node):
             # Decode QR from the frame
             qreader_out = self.decode_qr_from_frame(frame)
             degree_info = self.detect_degree_information(frame)
+
+            cleaned_content = [x for x in qreader_out if x is not None]
+            if cleaned_content : 
+                content.data = str(cleaned_content)
+                self.publisher_content.publish(content)
+
 
             for msg in qreader_out:
                 if not isinstance(msg, str) or not re.match(r'^\s*(?:[NSEW]\s*,\s*)*[NSEW]\s*,\s*\d+\s*$', msg):                    
@@ -59,12 +72,16 @@ class QRCodeDroneService(Node):
                 self.get_logger().info(f"QR Code Detected: {cleaned_list}  {degree_info}")
                 for r in cleaned_list:
                     sequence = r.split(',')
+                    
                     try:
                         qr_target = int(sequence[-1])
                         direction = sequence[self.current_obj - 1]
-
                         self.direction = direction
+
+                        # to copter
+                        dir.data = direction
                         self.get_logger().info(f"[Mission {self.current_obj}] Direction: {self.direction}, Rotation: {degree_info}")
+                        self.publisher_direction.publish(dir)
 
                         if qr_target == self.current_obj:
                             self.get_logger().info(f"Target {self.current_obj} achieved!")

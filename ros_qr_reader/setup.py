@@ -20,6 +20,7 @@ setup(
     # tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'sub = ros_qr_reader.qr_sub:main',
             'qr_code_service = ros_qr_reader.qr_srv:main',
             'qr_code_client = ros_qr_reader.qr_cli:main'
         ],
