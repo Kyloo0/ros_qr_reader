@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
-from std_msgs.msg import String
+from std_msgs.msg import String, Int8
 from vision_direction.srv import VisionDirection
 import numpy as np
 from qreader import QReader
@@ -21,6 +21,8 @@ class QRCodeDroneService(Node):
         self.image_subscriber = self.create_subscription(Image, '/camera/color/image_raw', self.image_callback,10)
         self.publisher_direction = self.create_publisher(String, 'qr_direction', 10)
         self.publisher_content = self.create_publisher(String, 'qr_content', 10)
+        self.publisher_target = self.create_publisher(Int8, 'qr_target', 10)
+
         timer_period = 10
         self.timer = self.create_timer(timer_period, self.image_callback)
         self.success = True
@@ -42,6 +44,7 @@ class QRCodeDroneService(Node):
         "Callback function for receiving and processing images."
         content = String()
         dir = String()
+        target = Int8()
 
         if not self.is_detecting:
             return
@@ -85,6 +88,9 @@ class QRCodeDroneService(Node):
 
                         if qr_target == self.current_obj:
                             self.get_logger().info(f"Target {self.current_obj} achieved!")
+                            target.data = qr_target
+                            self.publisher_target.publish(target)
+                            self.get_logger().info(f"Target {target.data}" )
                             self.is_detecting = False
 
                     except (ValueError, IndexError) as e:
