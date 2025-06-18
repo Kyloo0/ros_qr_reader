@@ -3,10 +3,11 @@ from rclpy.node import Node
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from std_msgs.msg import String, Int8
+from geometry_msgs.msg import Point
 from vision_direction.srv import VisionDirection
 import numpy as np
 from qreader import QReader
-from cv2 import imshow, waitKey
+from cv2 import imshow, waitKey, putText, polylines, circle, FONT_HERSHEY_SIMPLEX, LINE_AA
 import re
 
 class QRCodeDroneService(Node):
@@ -22,6 +23,7 @@ class QRCodeDroneService(Node):
         self.publisher_direction = self.create_publisher(String, 'qr_direction', 10)
         self.publisher_content = self.create_publisher(String, 'qr_content', 10)
         self.publisher_target = self.create_publisher(Int8, 'qr_target', 10)
+        self.publisher_center = self.create_publisher(Point, 'qr_center', 10)
 
         timer_period = 10
         self.timer = self.create_timer(timer_period, self.image_callback)
@@ -54,12 +56,14 @@ class QRCodeDroneService(Node):
 
             # Decode QR from the frame
             qreader_out = self.decode_qr_from_frame(frame)
-            degree_info = self.detect_degree_information(frame)
 
             cleaned_content = [x for x in qreader_out if x is not None]
+            center_info = self.detect_center_information(frame)
+
             if cleaned_content : 
                 content.data = str(cleaned_content)
                 self.publisher_content.publish(content)
+                self.publisher_center.publish(center_info)
 
 
             for msg in qreader_out:
@@ -72,7 +76,7 @@ class QRCodeDroneService(Node):
 
             cleaned_list = [x for x in qreader_out if x is not None]
             if cleaned_list and self.success:
-                self.get_logger().info(f"QR Code Detected: {cleaned_list}  {degree_info}")
+                self.get_logger().info(f"QR Code Detected: {cleaned_list}  {center_info}")
                 for r in cleaned_list:
                     sequence = r.split(',')
                     
@@ -83,7 +87,7 @@ class QRCodeDroneService(Node):
 
                         # to copter
                         dir.data = direction
-                        self.get_logger().info(f"[Mission {self.current_obj}] Direction: {self.direction}, Rotation: {degree_info}")
+                        self.get_logger().info(f"[Mission {self.current_obj}] Direction: {self.direction}, Corner: {center_info}")
                         self.publisher_direction.publish(dir)
 
                         if qr_target == self.current_obj:
@@ -103,42 +107,63 @@ class QRCodeDroneService(Node):
         except Exception as e:
             self.get_logger().error(f"Failed to process image: {e}")
 
-    def calculate_rotation_degrees(self, corners):
-        "Calculates the rotation degrees based on the QR code corners."
-        try:
-            corners = np.array(corners)
-            if corners.shape != (4, 2):
-                return (None, None)
+    # def calculate_rotation_degrees(self, corners):
+    #     "Calculates the rotation degrees based on the QR code corners."
+    #     try:
+    #         corners = np.array(corners)
+    #         if corners.shape != (4, 2):
+    #             return (None, None)
 
-            v1 = corners[1] - corners[0]
-            v2 = corners[3] - corners[0]
+    #         v1 = corners[1] - corners[0]
+    #         v2 = corners[3] - corners[0]
 
-            v1_normalized = v1 / np.linalg.norm(v1) if np.linalg.norm(v1) > 0 else np.array([1, 0])
-            v2_normalized = v2 / np.linalg.norm(v2) if np.linalg.norm(v2) > 0 else np.array([0, 1])
+    #         v1_normalized = v1 / np.linalg.norm(v1) if np.linalg.norm(v1) > 0 else np.array([1, 0])
+    #         v2_normalized = v2 / np.linalg.norm(v2) if np.linalg.norm(v2) > 0 else np.array([0, 1])
 
-            x_rotation_degrees = np.degrees(np.arctan2(v1_normalized[1], v1_normalized[0]))
-            y_rotation_degrees = np.degrees(np.arctan2(v2_normalized[0], v2_normalized[1]))
+    #         x_rotation_degrees = np.degrees(np.arctan2(v1_normalized[1], v1_normalized[0]))
+    #         y_rotation_degrees = np.degrees(np.arctan2(v2_normalized[0], v2_normalized[1]))
 
-            rotation_degrees = (x_rotation_degrees, y_rotation_degrees)
+    #         rotation_degrees = (x_rotation_degrees, y_rotation_degrees)
 
-            translation = -corners[0]
+    #         translation = -corners[0]
 
-            return (rotation_degrees, translation)
+    #         return (rotation_degrees, translation)
 
-        except (ValueError, ZeroDivisionError):
-            return (None, None)
+    #     except (ValueError, ZeroDivisionError):
+    #         return (None, None)
 
     def decode_qr_from_frame(self, frame):
         "Decodes QR code from the frame using QReader."
         qreader_out = QReader().detect_and_decode(image=frame)
         return qreader_out
     
-    def detect_degree_information(self, frame):
+    def detect_center_information(self, frame):
         "Detects the degree of rotation of the QR code in the frame."
+        
         detection_results = QReader().detect(image=frame)
         if detection_results:
             for k, v in enumerate(detection_results):
-                return self.calculate_rotation_degrees(detection_results[k]["quad_xy"])
+                corner = detection_results[k]["quad_xy"]
+                center_x = float(np.mean(corner[:, 0]))
+                center_y = float(np.mean(corner[:, 1]))
+                center_point = Point(x=center_x, y=center_y, z=0.0)
+
+                polylines(frame, [corner.astype(np.int32)], isClosed=True, color=(0, 255, 0), thickness=2)
+
+                for point in corner:
+                    x, y = int(point[0]), int(point[1])
+                    circle(frame, (x, y), radius=5, color=(255, 0, 0), thickness=-1)
+
+                for i, point in enumerate(corner):
+                    x, y = int(point[0]), int(point[1])
+                    putText(frame, f"{i}:({x},{y})", (x + 5, y - 5),
+                                FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1, LINE_AA)
+
+                # self.publisher_center.publish(center_point)
+
+                return center_point
+
+        return None
 
 def main(args=None):
     rclpy.init(args=args)
