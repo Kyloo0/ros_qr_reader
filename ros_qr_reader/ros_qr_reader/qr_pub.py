@@ -14,42 +14,42 @@ class QRCodeDroneService(Node):
     def __init__(self):
         super().__init__('qr_code_drone_service')
 
-        self.srv = self.create_service(VisionDirection, 'start_stop_qr_detection', self.start_stop_callback)
-        self.is_detecting = False
+        # self.srv = self.create_service(VisionDirection, 'start_stop_qr_detection', self.start_stop_callback)
+        # self.is_detecting = False
         self.current_obj = 0
         self.direction = ''
         self.bridge = CvBridge()
-        self.image_subscriber = self.create_subscription(Image, '/image_raw', self.image_callback,10)
-        self.publisher_direction = self.create_publisher(String, 'qr_direction', 10)
-        # self.publisher_content = self.create_publisher(String, 'qr_content', 10)
-        self.publisher_target = self.create_publisher(Int8, 'qr_target', 10)
-        self.publisher_center = self.create_publisher(Point, 'qr_center_bottom', 10)
+        self.image_subscriber = self.create_subscription(Image, '/camera/color/image_raw', self.image_content,10)
+        # self.publisher_direction = self.create_publisher(String, 'qr_direction', 10)
+        self.publisher_center = self.create_publisher(Point, 'qr_center_front', 10)
+        self.publisher_content = self.create_publisher(String, 'qr_content', 10)
+
 
         timer_period = 10
-        self.timer = self.create_timer(timer_period, self.image_callback)
+        self.timer = self.create_timer(timer_period, self.image_content)
         self.success = True
 
-    def start_stop_callback(self, request, response):
-        "Service callback to start or stop QR code detection."
-        if request.data< 1 or request.data > 4:
-            response.success = False
-            response.message = f"Mission {request.data} error, please check your input!"
-            return response
+    # def start_stop_callback(self, request, response):
+    #     "Service callback to start or stop QR code detection."
+    #     if request.data< 1 or request.data > 4:
+    #         response.success = False
+    #         response.message = f"Mission {request.data} error, please check your input!"
+    #         return response
 
-        self.current_obj = request.data
-        self.is_detecting = True
-        response.success = True
-        response.message = f"QR Code detection {'started' if self.is_detecting else 'stopped'}."
-        return response
+    #     self.current_obj = request.data
+    #     self.is_detecting = True
+    #     response.success = True
+    #     response.message = f"QR Code detection {'started' if self.is_detecting else 'stopped'}."
+    #     return response
 
-    def image_callback(self, msg=Image):
+    def image_content(self, msg=Image):
         "Callback function for receiving and processing images."
-        # content = String()
-        dir = String()
-        target = Int8()
+        content = String()
+        # dir = String()
+        # target = Int8()
 
-        if not self.is_detecting:
-            return
+        # if not self.is_detecting:
+        #     return
 
         try:
             frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
@@ -61,44 +61,46 @@ class QRCodeDroneService(Node):
             center_info = self.detect_center_information(frame)
 
             if cleaned_content : 
-                # content.data = str(cleaned_content)
-                # self.publisher_content.publish(content)
+                content.data = str(cleaned_content)
+                self.publisher_content.publish(content)
+                self.get_logger().info(f'Content : {cleaned_content}')
                 self.publisher_center.publish(center_info)
+                self.is_detecting = False
 
 
-            for msg in qreader_out:
-                if not isinstance(msg, str) or not re.match(r'^\s*(?:[NSEW]\s*,\s*)*[NSEW]\s*,\s*\d+\s*$', msg):                    
-                    self.get_logger().info(f"[Mission {self.current_obj}] is not in valid format. Message: {qreader_out}")
-                    self.success = False
-                    break
-                self.success = True
+            # for msg in qreader_out:
+            #     if not isinstance(msg, str) or not re.match(r'^\s*(?:[NSEW]\s*,\s*)*[NSEW]\s*,\s*\d+\s*$', msg):                    
+            #         self.get_logger().info(f"[Mission {self.current_obj}] is not in valid format. Message: {qreader_out}")
+            #         self.success = False
+            #         break
+            #     self.success = True
 
 
-            cleaned_list = [x for x in qreader_out if x is not None]
-            if cleaned_list and self.success:
-                self.get_logger().info(f"QR Code Detected: {cleaned_list}  {center_info}")
-                for r in cleaned_list:
-                    sequence = r.split(',')
+            # cleaned_list = [x for x in qreader_out if x is not None]
+            # if cleaned_list and self.success:
+            #     self.get_logger().info(f"QR Code Detected: {cleaned_list}  {center_info}")
+            #     for r in cleaned_list:
+            #         sequence = r.split(',')
                     
-                    try:
-                        qr_target = int(sequence[-1])
-                        direction = sequence[self.current_obj - 1]
-                        self.direction = direction
+            #         try:
+            #             qr_target = int(sequence[-1])
+            #             direction = sequence[self.current_obj - 1]
+            #             self.direction = direction
 
-                        # to copter
-                        dir.data = direction
-                        self.get_logger().info(f"[Mission {self.current_obj}] Direction: {self.direction}, Corner: {center_info}")
-                        self.publisher_direction.publish(dir)
+            #             # to copter
+            #             dir.data = direction
+            #             self.get_logger().info(f"[Mission {self.current_obj}] Direction: {self.direction}, Corner: {center_info}")
+            #             self.publisher_direction.publish(dir)
 
-                        if qr_target == self.current_obj:
-                            self.get_logger().info(f"Target {self.current_obj} achieved!")
-                            target.data = qr_target
-                            self.publisher_target.publish(target)
-                            self.get_logger().info(f"Target {target.data}" )
-                            self.is_detecting = False
+            #             # if qr_target == self.current_obj:
+            #             #     self.get_logger().info(f"Target {self.current_obj} achieved!")
+            #             #     target.data = qr_target
+            #             #     self.publisher_target.publish(target)
+            #             #     self.get_logger().info(f"Target {target.data}" )
+            #             #     self.is_detecting = False
 
-                    except (ValueError, IndexError) as e:
-                        self.get_logger().warning(f"Error parsing QR data: {e}")
+            #         except (ValueError, IndexError) as e:
+            #             self.get_logger().warning(f"Error parsing QR data: {e}")
 
             imshow("QR Code Scanner", frame)
             if waitKey(1) & 0xFF == ord('q'):

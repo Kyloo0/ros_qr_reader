@@ -16,7 +16,7 @@ class MinimalSubscriber(Node):
             10)
         self.subscription_center = self.create_subscription(
             Point,
-            'qr_center',
+            'qr_center_front',
             self.center_callback,
             10)
     

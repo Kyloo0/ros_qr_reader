@@ -22,7 +22,7 @@ public:
             std::bind(&MinimalSubscriber::target_listener_callback, this, std::placeholders::_1));
 
         subscription_center_ = this->create_subscription<geometry_msgs::msg::Point>(
-            "qr_center", 10,
+            "qr_center_bottom", 10,
             std::bind(&MinimalSubscriber::center_listener_callback, this, std::placeholders::_1));
     }
 
